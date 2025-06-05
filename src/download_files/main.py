@@ -167,6 +167,8 @@ def find_files_to_download(
         else:
             # Does not end in any ext
             # Treat as sub folder
+            if '.' in href:
+                continue # outer loop
             yield from find_files_to_download(
                 url,
                 sub_path / href.strip('/'),
