@@ -188,7 +188,7 @@ def search(
 @app.command()
 def download(
     url: str,
-    dest: pathlib.Path,
+    dest: pathlib.Path = pathlib.Path('.'),
     files: str = '',
     exts: list[str] = ['.pdf'],
     ):
@@ -204,7 +204,10 @@ def download(
             file_exts=exts,
             ))
 
-    download_files(files_to_download, url, dest)
+    errors = download_files(files_to_download, url, dest)
+
+    if errors:
+        raise FailedDownloads(errors)
 
 
 if __name__ == '__main__':
