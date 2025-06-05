@@ -7,7 +7,6 @@ import httpx
 import rich.progress
 from bs4 import BeautifulSoup
 import typer
-import send2trash
 
 
 app = typer.Typer()
@@ -61,8 +60,7 @@ def download_file(
         if download_size > free_space:
             raise NotEnoughFreeDiskSpace(
                 f'{file_name=}, {download_size=}, {free_space=}, '
-                f'{keep_free_bytes=}, {url=}, '
-                f'{allow_overwrite=}, {file_download_path=}'
+                f'{keep_free_bytes=}, {url=}, {file_download_path=}'
                 )
 
         
@@ -80,7 +78,6 @@ def download_files(
     url: str,
     dest: pathlib.Path = pathlib.Path('.'),
     already_downloaded_urls: set | None = None,
-    allow_overwrite: bool = False,
     keep_free_bytes: int = 0,
     ) -> dict[pathlib.Path, httpx.RequestError | httpx.HTTPStatusError | FileExistsError]:
 
@@ -206,7 +203,6 @@ def download(
     dest: pathlib.Path = pathlib.Path('.'),
     files: str = '',
     exts: list[str] = ['.pdf'],
-    allow_overwrite: bool = False,
     keep_free_bytes: int = 0,
     ):
     if files and pathlib.Path(files).is_file():
@@ -225,7 +221,6 @@ def download(
                 files = files_to_download,
                 url = url,
                 dest = dest,
-                allow_overwrite = allow_overwrite,
                 keep_free_bytes = keep_free_bytes,
                 )
 

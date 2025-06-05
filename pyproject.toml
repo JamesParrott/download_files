@@ -1,19 +1,24 @@
 [project]
 name = "download-files"
 version = "0.1.0"
-description = "Download files with specified extensions listed in <a> elements from a web page. The list of files can be reviewed first. "
+description = "Recursively download files from a web page, with specified extensions, listed in <a> elements. The list of files can be reviewed first. "
 license = {file= "LICENSE.md"}
 readme = "README.md"
 authors = [
     { name = "James Parrott", email = "james.parrott@proton.me" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 
 dependencies = ["httpx",
                 "rich",
                 "beautifulsoup4",
                 "typer",
                 ]
+                
+[project.urls]
+Repository = "https://github.com/JamesParrott/download_files"
+Issues = "https://github.com/JamesParrott/download_files/issues"
+
 [project.scripts]
 download_files="download_files.main:app"
 download-files="download_files.main:app"
