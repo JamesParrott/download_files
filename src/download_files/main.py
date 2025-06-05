@@ -1,4 +1,4 @@
-from collections.abc import Container
+from collections.abc import Collection, Iterator
 import pathlib
 import shutil
 
@@ -73,12 +73,12 @@ class FailedDownloads(ExceptionGroup):
 
 
 def download_files(  
-    files: Container[str],
+    files: Collection[pathlib.Path],
     url: str,
     dest: pathlib.Path,
     free_space_buffer:int = 100_000_000,
     already_downloaded_urls: set | None = None,
-    ) -> None:
+    ) -> dict[pathlib.Path,httpx.RequestError | httpx.HTTPStatusError]:
 
     already_downloaded_urls = already_downloaded_urls or set()
 
@@ -94,12 +94,12 @@ def download_files(
     ) as progress:
         download_pdfs_task = progress.add_task("Download_files", total = len(files))
 
-        for n, file_ in enumerate(files,1):
+        for n, file_path in enumerate(files,1):
 
-            file_path = file_.strip()
+            # file_path = file_.strip()
 
-            if not file_path:
-                continue
+            # if not file_path:
+                # continue
                      
             path = pathlib.Path(file_path)
 
@@ -112,7 +112,7 @@ def download_files(
                     already_downloaded_urls = already_downloaded_urls,
                     )
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                errors[file_] = e
+                errors[file_path] = e
                 pass
 
             progress.update(download_pdfs_task, completed=n)
@@ -122,9 +122,9 @@ def download_files(
 def find_files_to_download(
     url: str,
     sub_path: pathlib.Path = pathlib.Path(),
-    file_exts: Container[str] = ['.pdf',],
-    already_seen_urls: set[pathlib.Path] | None = None,
-    ) -> dict[str,httpx.RequestError| httpx.HTTPStatusError]:
+    file_exts: Collection[str] = ['.pdf',],
+    already_seen_urls: set[str] | None = None,
+    ) -> Iterator[pathlib.Path]:
     """ Download all files found at url = contents.  """
 
     already_seen_urls = already_seen_urls or set()
@@ -136,7 +136,6 @@ def find_files_to_download(
 
     already_seen_urls.add(url)
 
-    print(f'Requesting: {url}')
     response = httpx.get(f'{url}/')
     
     if not response.is_success:
@@ -146,9 +145,16 @@ def find_files_to_download(
 
     parsed = BeautifulSoup(contents_page_html, features="html.parser")
 
-    hrefs = [href 
+    if parsed.body is None or parsed.body.pre is None:
+        return
+
+
+
+    hrefs = [str(href) 
               for a in parsed.body.pre.find_all('a')
-              if '?' not in (href := a['href'])
+              if hasattr(a,'attrs')
+              if (href := a.attrs.get('href'))
+              if '?' not in href
               if href not in url
               if '..' not in href
             ]
@@ -174,7 +180,7 @@ def find_files_to_download(
 @app.command()
 def search(
     url: str,
-    exts: list[str] = ['.pdf'],
+    exts: list[str],
     ):
 
     for file_name in find_files_to_download(
@@ -194,7 +200,7 @@ def download(
     ):
     if files and pathlib.Path(files).is_file():
         with open(files,'rt') as file_names_file:
-            files_to_download = [file_ 
+            files_to_download = [pathlib.Path(file_) 
                                  for file_name in file_names_file
                                  if (file_ := file_name.strip())
                                 ] 
@@ -207,7 +213,7 @@ def download(
     errors = download_files(files_to_download, url, dest)
 
     if errors:
-        raise FailedDownloads(errors)
+        raise FailedDownloads(f'Failed to download: {list(errors)}',list(errors.values()))
 
 
 if __name__ == '__main__':
