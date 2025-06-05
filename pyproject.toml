@@ -12,7 +12,8 @@ requires-python = ">=3.12"
 dependencies = ["httpx",
                 "rich",
                 "beautifulsoup4",
-                "typer",]
+                "typer",
+                ]
 [project.scripts]
 download_files="download_files.main:app"
 download-files="download_files.main:app"

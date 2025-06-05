@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Collection, Iterator
 import pathlib
 import shutil
@@ -6,6 +7,7 @@ import httpx
 import rich.progress
 from bs4 import BeautifulSoup
 import typer
+import send2trash
 
 
 app = typer.Typer()
@@ -24,45 +26,46 @@ def form_url(
 def download_file(  
     file_name: pathlib.Path,
     url: str,
-    dest: pathlib.Path,
-    free_space_buffer:int = 100_000_000,
+    dest: pathlib.Path = pathlib.Path('.'),
     already_downloaded_urls: set | None = None,
+    keep_free_bytes: int = 0,
     ) -> None:
 
     """ Download file_name from url+file_name to dest / file_name"""
 
     already_downloaded_urls = already_downloaded_urls or set()
 
-    dest.mkdir(exist_ok=True,parents=True)
-    file_download_path = dest / file_name.name
-
     url = form_url(url, file_name)
 
     if url in already_downloaded_urls:
         return
+
+    file_download_path = dest / file_name.name
+
+    if file_download_path.exists():
+        raise FileExistsError(
+            f"A file or dir: {file_download_path} already exists in {dest=} "
+            f"with the same name as the file to be downloaded. "
+        )
+
+
+    dest.mkdir(exist_ok=True, parents=True)
 
     already_downloaded_urls.add(url)
 
     with httpx.stream("GET", url) as response:
         download_size = int(response.headers["Content-Length"])
                 
-        free_space = shutil.disk_usage(dest).free - free_space_buffer
-
-        if file_download_path.is_file():
-            file_size = file_download_path.stat().st_size
-            if file_size >= download_size:
-                return
-            free_space += file_size
-        
+        free_space = shutil.disk_usage(dest).free - keep_free_bytes       
 
         if download_size > free_space:
             raise NotEnoughFreeDiskSpace(
                 f'{file_name=}, {download_size=}, {free_space=}, '
-                f'{free_space_buffer=}, {url=}'
+                f'{keep_free_bytes=}, {url=}, '
+                f'{allow_overwrite=}, {file_download_path=}'
                 )
 
-        file_download_path.unlink(missing_ok=True)
-
+        
         with file_download_path.open('wb') as downloaded_file:
             for chunk in response.iter_bytes():
                 downloaded_file.write(chunk)
@@ -75,10 +78,12 @@ class FailedDownloads(ExceptionGroup):
 def download_files(  
     files: Collection[pathlib.Path],
     url: str,
-    dest: pathlib.Path,
-    free_space_buffer:int = 100_000_000,
+    dest: pathlib.Path = pathlib.Path('.'),
     already_downloaded_urls: set | None = None,
-    ) -> dict[pathlib.Path,httpx.RequestError | httpx.HTTPStatusError]:
+    allow_overwrite: bool = False,
+    keep_free_bytes: int = 0,
+    ) -> dict[pathlib.Path, httpx.RequestError | httpx.HTTPStatusError | FileExistsError]:
+
 
     already_downloaded_urls = already_downloaded_urls or set()
 
@@ -110,8 +115,10 @@ def download_files(
                     url=url,
                     dest=dest,
                     already_downloaded_urls = already_downloaded_urls,
+                    keep_free_bytes = keep_free_bytes,
                     )
-            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            except (httpx.RequestError, httpx.HTTPStatusError, FileExistsError) as e:
+                # NotEnoughFreeDiskSpace is intentionally excluded, to stop the process early.
                 errors[file_path] = e
                 pass
 
@@ -199,6 +206,8 @@ def download(
     dest: pathlib.Path = pathlib.Path('.'),
     files: str = '',
     exts: list[str] = ['.pdf'],
+    allow_overwrite: bool = False,
+    keep_free_bytes: int = 0,
     ):
     if files and pathlib.Path(files).is_file():
         with open(files,'rt') as file_names_file:
@@ -212,7 +221,13 @@ def download(
             file_exts=exts,
             ))
 
-    errors = download_files(files_to_download, url, dest)
+    errors = download_files(
+                files = files_to_download,
+                url = url,
+                dest = dest,
+                allow_overwrite = allow_overwrite,
+                keep_free_bytes = keep_free_bytes,
+                )
 
     if errors:
         raise FailedDownloads(f'Failed to download: {list(errors)}',list(errors.values()))
